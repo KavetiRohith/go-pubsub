@@ -185,17 +185,17 @@ func isSubTopic(main, subTopic string) bool {
 	if main == subTopic {
 		return true
 	}
-	main_ := strings.Split(main, ".")
-	subTopic_ := strings.Split(subTopic, ".")
+	main_ := strings.Split(main, "|")
+	subTopic_ := strings.Split(subTopic, "|")
 
 	if main_[0] == "*" {
-		// handles case where main is *.*.*
+		// handles case where main is *|*|*
 		return true
 	} else if main_[0] == subTopic_[0] && main_[1] == "*" {
-		// handles case where main is office.*.*
+		// handles case where main is office|*|*
 		return true
 	} else if main_[0] == subTopic_[0] && main_[1] == subTopic_[1] && main_[2] == "*" {
-		// handles case where main is office.bucket.*
+		// handles case where main is office|bucket|*
 		return true
 	}
 
@@ -203,19 +203,19 @@ func isSubTopic(main, subTopic string) bool {
 }
 
 func isValidSubscribeTopic(m WsMessage) bool {
-	// office.bucket.filename
+	// office|bucket|filename
 	switch m.Action {
 	case SUBSCRIBE, UNSUBSCRIBE:
-		dot_count := strings.Count(m.Topic, ".")
-		return dot_count == 2
+		pipe_count := strings.Count(m.Topic, "|")
+		return pipe_count == 2
 	default:
 		return false
 	}
 }
 
 func isValidPublishTopic(m publishMessage) bool {
-	// office.bucket.filename
-	topic_slice := strings.Split(m.Topic, ".")
+	// office|bucket|filename
+	topic_slice := strings.Split(m.Topic, "|")
 	return len(topic_slice) == 3 && topic_slice[0] != "*" && topic_slice[1] != "*" && topic_slice[2] != "*"
 }
 
