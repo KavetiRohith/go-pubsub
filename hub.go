@@ -166,11 +166,12 @@ func (h *Hub) run() {
 }
 
 func (h *Hub) DumpSubscriptionsToFile(path string) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
 		log.Printf("Error opening file at path %v, error: %v\n", path, err)
 	}
 	defer file.Close()
+
 	e := json.NewEncoder(file)
 	err = e.Encode(h.subscriptionsMap)
 	if err != nil {
@@ -179,7 +180,6 @@ func (h *Hub) DumpSubscriptionsToFile(path string) {
 	}
 
 	log.Printf("Dump to file: %v done\n", path)
-	return
 }
 
 func savePublishMessageToFile(clientId string, message PublishMessage) {
@@ -239,6 +239,10 @@ func readPendingPublishMessages(clientId string) ([]PublishMessage, error) {
 	}
 
 	err = file.Truncate(0)
+	if err != nil {
+		return nil, err
+	}
+	_, err = file.Seek(0, 0)
 	if err != nil {
 		return nil, err
 	}

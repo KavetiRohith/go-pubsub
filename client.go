@@ -179,12 +179,12 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				log.Printf("Write to Client with Id %v failed closing", c.ID)
+				log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
 				return
 			}
 			messageJson, err := json.Marshal(*message)
 			if err != nil {
-				log.Println("Error marshalling publish message")
+				log.Println("Error marshalling publish message, error: ", err)
 				break
 			}
 			w.Write(messageJson)
@@ -203,14 +203,16 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 			}
 
 			if err := w.Close(); err != nil {
+				log.Println("error closing writer", err)
 				return
 			}
 
 		case message, ok := <-c.infoChan:
 			if ok {
+				c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 				err := c.conn.WriteMessage(websocket.TextMessage, []byte(message))
 				if err != nil {
-					log.Printf("Write to Client with Id %v failed closing", c.ID)
+					log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
 					return
 				}
 			}
@@ -218,7 +220,7 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("Ping to Client with Id %v failed closing", c.ID)
+				log.Printf("Ping to Client with Id %v failed closing, error %v\n", c.ID, err)
 				return
 			}
 		}

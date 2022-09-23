@@ -25,7 +25,7 @@ func isValidPublishTopic(topic *string) bool {
 
 // isSubTopic returns true if the given subTopic is a valid
 // instance of the given pubTopic
-// subTopic can be: bucket, bucket/*,bucket/filename,*
+// subTopic can be: bucket, bucket/*,bucket/filename,*, */filename
 // pubTopic can be: bucket, bucket/filename
 func isSubTopic(subTopic, pubTopic string) bool {
 	if subTopic == pubTopic || subTopic == "*" {
@@ -35,7 +35,9 @@ func isSubTopic(subTopic, pubTopic string) bool {
 	pubTopic_ := strings.Split(pubTopic, "/")
 
 	if len(pubTopic_) == 2 && len(subTopic_) == 2 {
-		if subTopic_[0] == pubTopic_[0] && pubTopic_[1] == "*" {
+		if subTopic_[0] == pubTopic_[0] && subTopic_[1] == "*" {
+			return true
+		} else if subTopic_[0] == "*" && subTopic_[1] == pubTopic_[1] {
 			return true
 		}
 	}

@@ -10,7 +10,7 @@ import (
 type SubscriptionsMap map[string][]string
 
 func ReadSubscriptionsFromFile(path string) (SubscriptionsMap, error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, err
 	}
