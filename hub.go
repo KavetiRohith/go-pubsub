@@ -104,14 +104,15 @@ func (h *Hub) run() {
 
 		case message := <-h.unsubscribe:
 			subs := h.subscriptionsMap[message.client.ID]
+			newSubs := make([]string, len(subs))
 
-			for index, topic := range subs {
-				if topic == message.topic {
-					subs = append(subs[:index], subs[index+1:]...)
+			for _, topic := range subs {
+				if topic != message.topic {
+					newSubs = append(newSubs, topic)
 				}
 			}
 
-			h.subscriptionsMap[message.client.ID] = subs
+			h.subscriptionsMap[message.client.ID] = newSubs
 
 			log.Printf("Client %v unsubscribed from topic %v\n", message.client.ID, message.topic)
 			message.client.infoChan <- fmt.Sprintf("unsubscribe from topic %v successful", message.topic)
