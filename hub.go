@@ -17,7 +17,7 @@ type Hub struct {
 	// Registered clients.
 	clients map[string]*Client
 
-	// map of  user id to subscriptions and last disconnect time
+	// map of  user id to subscriptions
 	subscriptionsMap SubscriptionsMap
 
 	// Inbound messages from the clients.
@@ -58,6 +58,11 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client.ID] = client
+
+			if h.subscriptionsMap[client.ID] == nil {
+				h.subscriptionsMap[client.ID] = map[string]struct{}{}
+			}
+
 			log.Printf("Client %v connected with IP address %v\n", client.ID, client.conn.RemoteAddr())
 			pendingPublishMessages, err := readPendingPublishMessages(client.ID)
 			if err != nil {
@@ -95,7 +100,7 @@ func (h *Hub) run() {
 
 		case message := <-h.subscribe:
 			subs := h.subscriptionsMap[message.client.ID]
-			subs = append(subs, message.topic)
+			subs[message.topic] = struct{}{}
 			h.subscriptionsMap[message.client.ID] = subs
 
 			log.Printf("Client %v subscribed to topic %v\n", message.client.ID, message.topic)
@@ -104,15 +109,8 @@ func (h *Hub) run() {
 
 		case message := <-h.unsubscribe:
 			subs := h.subscriptionsMap[message.client.ID]
-			newSubs := make([]string, len(subs))
-
-			for _, topic := range subs {
-				if topic != message.topic {
-					newSubs = append(newSubs, topic)
-				}
-			}
-
-			h.subscriptionsMap[message.client.ID] = newSubs
+			delete(subs, message.topic)
+			h.subscriptionsMap[message.client.ID] = subs
 
 			log.Printf("Client %v unsubscribed from topic %v\n", message.client.ID, message.topic)
 			message.client.infoChan <- fmt.Sprintf("unsubscribe from topic %v successful", message.topic)
@@ -120,7 +118,7 @@ func (h *Hub) run() {
 		case publishMessage := <-h.broadcast:
 		ClientListLoop:
 			for clientID, subscriptionTopics := range h.subscriptionsMap {
-				for _, subscriptionTopic := range subscriptionTopics {
+				for subscriptionTopic := range subscriptionTopics {
 					// check whether subscriptionTopic is an instance of publishTopic
 					if isSubTopic(subscriptionTopic, publishMessage.Topic) {
 						client, isConnected := h.clients[clientID]

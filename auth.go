@@ -39,7 +39,7 @@ func GetAuthToken(redis_pool *redis.Pool, r *http.Request) (string, error) {
 	case nil:
 		cookie_str := cookie.String()
 		if cookie_str == "" {
-			return "", errors.New("Empty or no cookie recieved")
+			return "", errors.New("empty or no cookie recieved")
 		}
 
 		// slicing beacause the returned cookie string is of format "set-cookie=token"
@@ -47,7 +47,7 @@ func GetAuthToken(redis_pool *redis.Pool, r *http.Request) (string, error) {
 	}
 
 	if token == "" {
-		return "", errors.New("Empty or no authorization token provided")
+		return "", errors.New("empty or no authorization token provided")
 	}
 
 	res, err := redis.Bytes(client.Do("GET", "login.token."+token))
