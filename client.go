@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -265,6 +266,13 @@ func servePublish(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Error decoding message")
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(string(m.Message)) == "" || strings.TrimSpace(m.Topic) == "" {
+		log.Println("Neither message nor topic can be Empty")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Neither message nor topic can be Empty"))
 		return
 	}
 

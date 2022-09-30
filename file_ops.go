@@ -14,12 +14,10 @@ func (s SubscriptionsMap) MarshalJSON() ([]byte, error) {
 	finalMap := make(map[string][]string)
 
 	for key, set := range s {
-		values := make([]string, len(set))
+		values := make([]string, 0, len(set))
 
-		i := 0
 		for value := range set {
-			values[i] = value
-			i++
+			values = append(values, value)
 		}
 
 		finalMap[key] = values
