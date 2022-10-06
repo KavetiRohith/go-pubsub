@@ -5,14 +5,14 @@ import (
 )
 
 type WsMessage struct {
-	Action  string          `json:"action"`
-	Topic   string          `json:"topic"`
-	Message json.RawMessage `json:"message"`
+	Action  string           `json:"action"`
+	Topic   string           `json:"topic"`
+	Message *json.RawMessage `json:"message"`
 }
 
 type PublishMessage struct {
-	Message json.RawMessage `json:"message"`
-	Topic   string          `json:"topic"`
+	Message *json.RawMessage `json:"message"`
+	Topic   string           `json:"topic"`
 }
 
 type SubscribeMessage struct {

@@ -15,37 +15,37 @@ const writeWaitChan = (12 * writeWait) / 10
 // clients.
 type Hub struct {
 	// Registered clients.
-	clients map[string]*Client
+	clients map[string]Client
 
 	// map of  user id to subscriptions
 	subscriptionsMap SubscriptionsMap
 
 	// Inbound messages from the clients.
-	broadcast chan *PublishMessage
+	broadcast chan PublishMessage
 
 	// Register requests from the clients.
-	register chan *Client
+	register chan Client
 
 	// Unregister requests from clients.
-	unregister chan *Client
+	unregister chan Client
 
 	// Subscribe requests from clients.
-	subscribe chan *SubscribeMessage
+	subscribe chan SubscribeMessage
 
 	// Unsubscribe requests from clients.
-	unsubscribe chan *UnsubscribeMessage
+	unsubscribe chan UnsubscribeMessage
 
 	exitchan chan struct{}
 }
 
 func newHub(prevSubscriptions SubscriptionsMap, exitchan chan struct{}) *Hub {
 	return &Hub{
-		broadcast:        make(chan *PublishMessage),
-		register:         make(chan *Client),
-		unregister:       make(chan *Client),
-		subscribe:        make(chan *SubscribeMessage),
-		unsubscribe:      make(chan *UnsubscribeMessage),
-		clients:          make(map[string]*Client),
+		broadcast:        make(chan PublishMessage),
+		register:         make(chan Client),
+		unregister:       make(chan Client),
+		subscribe:        make(chan SubscribeMessage),
+		unsubscribe:      make(chan UnsubscribeMessage),
+		clients:          make(map[string]Client),
 		subscriptionsMap: prevSubscriptions,
 		exitchan:         exitchan,
 	}
@@ -71,10 +71,10 @@ func (h *Hub) run() {
 			}
 
 		PUBLISHLOOP:
-			for index, publishMessage := range pendingPublishMessages {
+			for index := range pendingPublishMessages {
 				writeWaitTimer := time.NewTimer(writeWaitChan)
 				select {
-				case client.send <- &publishMessage:
+				case client.send <- pendingPublishMessages[index]:
 					if !writeWaitTimer.Stop() {
 						// if the timer has been stopped then read from the channel.
 						<-writeWaitTimer.C
@@ -127,7 +127,7 @@ func (h *Hub) run() {
 							writeWaitTimer := time.NewTimer(writeWaitChan)
 
 							select {
-							case client.send <- &PublishMessage{Message: publishMessage.Message, Topic: publishMessage.Topic}:
+							case client.send <- publishMessage:
 								// stop the timer once the message is sent.
 								if !writeWaitTimer.Stop() {
 									// if the timer has been stopped then read from the channel.
@@ -139,12 +139,12 @@ func (h *Hub) run() {
 							case <-writeWaitTimer.C:
 								close(client.send)
 								delete(h.clients, clientID)
-								savePublishMessageToFile(clientID, *publishMessage)
+								savePublishMessageToFile(clientID, publishMessage)
 								log.Printf("write to client %v timed out dumped the message to file %v \n", clientID, clientID+".ndjson")
 								continue ClientListLoop
 							}
 						} else {
-							savePublishMessageToFile(clientID, *publishMessage)
+							savePublishMessageToFile(clientID, publishMessage)
 							log.Printf("client %v is unavailable dumping message to file %v \n", clientID, clientID+".ndjson")
 						}
 						// continue from the outer loop to avoid sending the
@@ -224,11 +224,10 @@ func readPendingPublishMessages(clientId string) ([]PublishMessage, error) {
 	defer file.Close()
 
 	var messages []PublishMessage
-	var message PublishMessage
-
 	d := json.NewDecoder(file)
 
 	for {
+		var message PublishMessage
 		if err := d.Decode(&message); err == io.EOF {
 			break // done decoding file
 		} else if err != nil {

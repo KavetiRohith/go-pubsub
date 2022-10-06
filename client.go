@@ -52,7 +52,7 @@ type Client struct {
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
-	send chan *PublishMessage
+	send chan PublishMessage
 
 	// chan used to send info about malformed topics and status messages to the client
 	infoChan chan string
@@ -70,7 +70,7 @@ func (c *Client) readPump(wg *sync.WaitGroup) {
 	defer func() {
 		// unregister the client
 		select {
-		case c.hub.unregister <- c:
+		case c.hub.unregister <- *c:
 		// ignore unregister when exit is triggered
 		case <-c.hub.exitchan:
 		}
@@ -109,7 +109,7 @@ READLOOP:
 			}
 
 			select {
-			case c.hub.subscribe <- &SubscribeMessage{c, m.Topic}:
+			case c.hub.subscribe <- SubscribeMessage{c, m.Topic}:
 			case <-c.disconnect:
 				log.Printf("Ignoring subscribe to topic: %v from client: %v", m.Topic, c.ID)
 				return
@@ -123,7 +123,7 @@ READLOOP:
 			}
 
 			select {
-			case c.hub.unsubscribe <- &UnsubscribeMessage{c, m.Topic}:
+			case c.hub.unsubscribe <- UnsubscribeMessage{c, m.Topic}:
 			case <-c.disconnect:
 				log.Printf("Ignoring unsubscribe to topic: %v from client: %v", m.Topic, c.ID)
 				return
@@ -137,7 +137,7 @@ READLOOP:
 			}
 
 			select {
-			case c.hub.broadcast <- &PublishMessage{Message: m.Message, Topic: m.Topic}:
+			case c.hub.broadcast <- PublishMessage{Message: m.Message, Topic: m.Topic}:
 				log.Printf("publish new message on topic %s - %s\n", m.Topic, m.Message)
 				c.infoChan <- fmt.Sprintf("publish on topic %v initiated\n", m.Topic)
 			case <-c.disconnect:
@@ -183,7 +183,7 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 				log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
 				return
 			}
-			messageJson, err := json.Marshal(*message)
+			messageJson, err := json.Marshal(message)
 			if err != nil {
 				log.Println("Error marshalling publish message, error: ", err)
 				break
@@ -194,8 +194,8 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 			n := len(c.send)
 			for i := 0; i < n; i++ {
 				w.Write(newline)
-				message = <-c.send
-				messageJson, err = json.Marshal(*message)
+				message := <-c.send
+				messageJson, err := json.Marshal(message)
 				if err != nil {
 					log.Println("Error marshalling publish message", err, message)
 					continue
@@ -242,7 +242,7 @@ func serveWs(redisPool *redis.Pool, hub *Hub, w http.ResponseWriter, r *http.Req
 		return
 	}
 	// client := &Client{ID: uuid.NewV4().String(), hub: hub, conn: conn, send: make(chan *PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
-	client := &Client{ID: token, hub: hub, conn: conn, send: make(chan *PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
+	client := Client{ID: token, hub: hub, conn: conn, send: make(chan PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
 
 	client.hub.register <- client
 
@@ -269,7 +269,7 @@ func servePublish(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(string(m.Message)) == "" || strings.TrimSpace(m.Topic) == "" {
+	if strings.TrimSpace(string(*m.Message)) == "" || strings.TrimSpace(m.Topic) == "" {
 		log.Println("Neither message nor topic can be Empty")
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Neither message nor topic can be Empty"))
@@ -285,5 +285,5 @@ func servePublish(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("publish new message on topic %s - %s\n", m.Topic, m.Message)
 
-	hub.broadcast <- &m
+	hub.broadcast <- m
 }
