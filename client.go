@@ -137,7 +137,7 @@ READLOOP:
 			}
 
 			select {
-			case c.hub.broadcast <- PublishMessage{Message: m.Message, Topic: m.Topic}:
+			case c.hub.broadcast <- PublishMessage{Message: m.Message, Topic: m.Topic, Time: time.Now()}:
 				log.Printf("publish new message on topic %s - %s\n", m.Topic, m.Message)
 				c.infoChan <- fmt.Sprintf("publish on topic %v initiated\n", m.Topic)
 			case <-c.disconnect:
@@ -268,6 +268,7 @@ func servePublish(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	m.Time = time.Now()
 
 	if strings.TrimSpace(string(*m.Message)) == "" || strings.TrimSpace(m.Topic) == "" {
 		log.Println("Neither message nor topic can be Empty")

@@ -7,14 +7,20 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"sync"
 	"syscall"
 	"time"
 )
 
 var addr = flag.String("addr", ":3000", "http service address")
-var subscriptionsFilePath = flag.String("subscriptions_file_path", "client_subscriptions.json", "path to file containing subscriptions in json")
-var redisServerAddr = flag.String("redis server address", ":6379", "")
+var subscriptionsFile = flag.String(
+	"subscriptions_file",
+	"client_subscriptions.json",
+	"name of the file containing subscriptions in json",
+)
+var redisServerAddr = flag.String("redis_server_address", ":6379", "")
+var pubsubDataDirPath = flag.String("pubsub_data_dir_path", ".", "")
 
 func main() {
 	log.SetOutput(os.Stdout)
@@ -24,7 +30,9 @@ func main() {
 
 	redisPool := NewRedisPool(*redisServerAddr)
 
-	subscriptions, err := ReadSubscriptionsFromFile(*subscriptionsFilePath)
+	subscriptions, err := ReadSubscriptionsFromFile(
+		path.Join(*pubsubDataDirPath, *subscriptionsFile),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

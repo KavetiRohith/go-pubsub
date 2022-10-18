@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"time"
 )
 
@@ -52,7 +53,9 @@ func newHub(prevSubscriptions SubscriptionsMap, exitchan chan struct{}) *Hub {
 }
 
 func (h *Hub) run() {
-	defer h.DumpSubscriptionsToFile(*subscriptionsFilePath)
+	defer h.DumpSubscriptionsToFile(
+		path.Join(*pubsubDataDirPath, *subscriptionsFile),
+	)
 
 	for {
 		select {
@@ -182,7 +185,7 @@ func (h *Hub) DumpSubscriptionsToFile(path string) {
 }
 
 func savePublishMessageToFile(clientId string, message PublishMessage) {
-	path := clientId + ".ndjson"
+	path := path.Join(*pubsubDataDirPath, clientId+".ndjson")
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		log.Printf("Error opening file at path %v, error: %v\n", path, err)
@@ -198,7 +201,7 @@ func savePublishMessageToFile(clientId string, message PublishMessage) {
 }
 
 func savePublishMessagesToFile(clientId string, messages []PublishMessage) {
-	path := clientId + ".ndjson"
+	path := path.Join(*pubsubDataDirPath, clientId+".ndjson")
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		log.Printf("Error opening file at path %v, error: %v\n", path, err)
@@ -216,7 +219,7 @@ func savePublishMessagesToFile(clientId string, messages []PublishMessage) {
 }
 
 func readPendingPublishMessages(clientId string) ([]PublishMessage, error) {
-	path := clientId + ".ndjson"
+	path := path.Join(*pubsubDataDirPath, clientId+".ndjson")
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		log.Printf("Error opening file at path %v, error: %v\n", path, err)

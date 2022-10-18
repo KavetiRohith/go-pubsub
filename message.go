@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"time"
 )
 
 type WsMessage struct {
@@ -13,6 +14,7 @@ type WsMessage struct {
 type PublishMessage struct {
 	Message *json.RawMessage `json:"message"`
 	Topic   string           `json:"topic"`
+	Time    time.Time        `json:"message_received_at"`
 }
 
 type SubscribeMessage struct {
