@@ -85,10 +85,9 @@ func main() {
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("Server Shutdown Failed:%+v", err)
-	} else {
-		log.Println("Server Exited Properly")
+		return
 	}
-
+	log.Println("Waiting for Connections to close")
 	wg.Wait()
-
+	log.Println("Server Exited Properly")
 }
