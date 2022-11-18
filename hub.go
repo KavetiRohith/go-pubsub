@@ -108,7 +108,15 @@ func (h *Hub) run() {
 
 			log.Printf("Client %v subscribed to topic %v\n", message.client.ID, message.topic)
 
-			message.client.infoChan <- fmt.Sprintf("subscription to topic %v successful", message.topic)
+			err := sendMessageOnChannel(message.client.infoChan, fmt.Sprintf("subscription to topic %v successful", message.topic))
+
+			if err != nil {
+				log.Println("Disconnecting client unable to send info message:", err)
+				if _, ok := h.clients[message.client.ID]; ok {
+					delete(h.clients, message.client.ID)
+					close(message.client.infoChan)
+				}
+			}
 
 		case message := <-h.unsubscribe:
 			subs := h.subscriptionsMap[message.client.ID]
@@ -116,7 +124,16 @@ func (h *Hub) run() {
 			h.subscriptionsMap[message.client.ID] = subs
 
 			log.Printf("Client %v unsubscribed from topic %v\n", message.client.ID, message.topic)
-			message.client.infoChan <- fmt.Sprintf("unsubscribe from topic %v successful", message.topic)
+
+			err := sendMessageOnChannel(message.client.infoChan, fmt.Sprintf("unsubscribe from topic %v successful", message.topic))
+
+			if err != nil {
+				log.Println("Disconnecting client unable to send info message:", err)
+				if _, ok := h.clients[message.client.ID]; ok {
+					delete(h.clients, message.client.ID)
+					close(message.client.infoChan)
+				}
+			}
 
 		case publishMessage := <-h.broadcast:
 		ClientListLoop:

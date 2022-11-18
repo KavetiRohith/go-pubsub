@@ -61,6 +61,25 @@ type Client struct {
 	disconnect chan struct{}
 }
 
+func sendMessageOnChannel(infoChan chan string, msg string) error {
+	writeWaitTimer := time.NewTimer(writeWaitChan)
+
+	select {
+	case infoChan <- msg:
+		// stop the timer once the message is sent.
+		if !writeWaitTimer.Stop() {
+			// if the timer has been stopped then read from the channel.
+			<-writeWaitTimer.C
+		}
+		return nil
+
+	// handle case where the client can't keep up with
+	// the rate of messages generated
+	case <-writeWaitTimer.C:
+		return errors.New("write timed out")
+	}
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -95,7 +114,12 @@ READLOOP:
 
 		if err = json.Unmarshal(message, &m); err != nil {
 			log.Printf("Error decoding json from client %v: %v\n", c.ID, err)
-			c.infoChan <- "Invalid json received"
+
+			err := sendMessageOnChannel(c.infoChan, "Invalid json received")
+			if err != nil {
+				break READLOOP
+			}
+
 			continue READLOOP
 		}
 
@@ -104,7 +128,12 @@ READLOOP:
 		case SUBSCRIBE:
 			if !isValidSubscribeTopic(&m.Topic) {
 				log.Printf("Incorrectly formatted subscribe topic: %v from client: %v\n", m.Topic, c.ID)
-				c.infoChan <- fmt.Sprintf("Incorrectly formatted subscribe topic: %v from client: %v\n", m.Topic, c.ID)
+
+				err := sendMessageOnChannel(c.infoChan, fmt.Sprintf("Incorrectly formatted subscribe topic: %v from client: %v\n", m.Topic, c.ID))
+				if err != nil {
+					break READLOOP
+				}
+
 				break SWITCH
 			}
 
@@ -118,7 +147,12 @@ READLOOP:
 		case UNSUBSCRIBE:
 			if !isValidSubscribeTopic(&m.Topic) {
 				log.Printf("Incorrectly formatted unsubscribe topic: %v from client: %v\n", m.Topic, c.ID)
-				c.infoChan <- fmt.Sprintf("Incorrectly formatted unsubscribe topic: %v from client: %v\n", m.Topic, c.ID)
+
+				err := sendMessageOnChannel(c.infoChan, fmt.Sprintf("Incorrectly formatted unsubscribe topic: %v from client: %v\n", m.Topic, c.ID))
+				if err != nil {
+					break READLOOP
+				}
+
 				break SWITCH
 			}
 
@@ -132,14 +166,24 @@ READLOOP:
 		case PUBLISH:
 			if !isValidPublishTopic(&m.Topic) {
 				log.Printf("Incorrectly formatted publish topic: %v from client: %v\n", m.Topic, c.ID)
-				c.infoChan <- fmt.Sprintf("Incorrectly formatted publish topic: %v from client: %v\n", m.Topic, c.ID)
+
+				err := sendMessageOnChannel(c.infoChan, fmt.Sprintf("Incorrectly formatted publish topic: %v from client: %v\n", m.Topic, c.ID))
+				if err != nil {
+					break READLOOP
+				}
+
 				break SWITCH
 			}
 
 			select {
 			case c.hub.broadcast <- PublishMessage{Message: m.Message, Topic: m.Topic, Time: time.Now()}:
 				log.Printf("publish new message on topic %s - %s\n", m.Topic, m.Message)
-				c.infoChan <- fmt.Sprintf("publish on topic %v initiated\n", m.Topic)
+
+				err := sendMessageOnChannel(c.infoChan, fmt.Sprintf("publish on topic %v initiated\n", m.Topic))
+				if err != nil {
+					break READLOOP
+				}
+
 			case <-c.disconnect:
 				log.Printf("Ignoring publish to topic: %v with message %v from client: %v", m.Topic, m.Message, c.ID)
 				return
@@ -147,7 +191,7 @@ READLOOP:
 
 		default:
 
-			log.Printf("Unknown action %v drom client %v\n", m.Action, c.ID)
+			log.Printf("Unknown action %v from client %v\n", m.Action, c.ID)
 		}
 	}
 }
@@ -209,13 +253,19 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 			}
 
 		case message, ok := <-c.infoChan:
-			if ok {
-				c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-				err := c.conn.WriteMessage(websocket.TextMessage, []byte(message))
-				if err != nil {
-					log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
-					return
-				}
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// The hub closed the channel.
+				c.conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+				)
+				return
+			}
+
+			err := c.conn.WriteMessage(websocket.TextMessage, []byte(message))
+			if err != nil {
+				log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
+				return
 			}
 
 		case <-ticker.C:
@@ -278,7 +328,7 @@ func servePublish(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isValidPublishTopic(&m.Topic) {
-		log.Println("Incorrectly formatted topic")
+		log.Printf("Incorrectly formatted topic  %s - %s\n", m.Topic, m.Message)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Incorrectly formated publish topic"))
 		return
