@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -93,7 +94,10 @@ func (c *Client) readPump(wg *sync.WaitGroup) {
 		// ignore unregister when exit is triggered
 		case <-c.hub.exitchan:
 		}
-		c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			log.Printf("Unable to close connection for client at readPump %s: %v\n", c.ID, err)
+		}
 		log.Println("stopped readPump for ", c.ID)
 		wg.Done()
 	}()
@@ -205,8 +209,16 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			log.Printf("Unable to close connection for client at writePump %s: %v\n", c.ID, err)
+		}
 		close(c.disconnect)
+		messages := []PublishMessage{}
+		for msg := range c.send {
+			messages = append(messages, msg)
+		}
+		savePublishMessagesToFile(c.ID, messages)
 		log.Println("stopped writePump for ", c.ID)
 		wg.Done()
 	}()
@@ -225,6 +237,7 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				log.Printf("Write to Client with Id %v failed closing, error %v\n", c.ID, err)
+				savePublishMessageToFile(c.ID, message)
 				return
 			}
 			messageJson, err := json.Marshal(message)
@@ -232,19 +245,33 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 				log.Println("Error marshalling publish message, error: ", err)
 				break
 			}
-			w.Write(messageJson)
+			_, err = w.Write(messageJson)
+			if err != nil {
+				log.Printf("Disconnecting unable to send message to client %s: %v\n", c.ID, err)
+				savePublishMessageToFile(c.ID, message)
+				return
+			}
 
 			// Add queued publish messages to the current websocket message.
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write(newline)
+				_, err := w.Write(newline)
+				if err != nil {
+					log.Printf("Disconnecting unable to send message to client %s: %v\n", c.ID, err)
+					return
+				}
 				message := <-c.send
 				messageJson, err := json.Marshal(message)
 				if err != nil {
 					log.Println("Error marshalling publish message", err, message)
 					continue
 				}
-				w.Write(messageJson)
+				_, err = w.Write(messageJson)
+				if err != nil {
+					log.Printf("Disconnecting unable to send message to client %s: %v\n", c.ID, err)
+					savePublishMessageToFile(c.ID, message)
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
@@ -252,15 +279,8 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 				return
 			}
 
-		case message, ok := <-c.infoChan:
+		case message := <-c.infoChan:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				// The hub closed the channel.
-				c.conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-				)
-				return
-			}
 
 			err := c.conn.WriteMessage(websocket.TextMessage, []byte(message))
 			if err != nil {
@@ -280,7 +300,7 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 
 // serveWs handles websocket requests from the peer.
 func serveWs(redisPool *redis.Pool, hub *Hub, w http.ResponseWriter, r *http.Request, wg *sync.WaitGroup) {
-	token, err := GetAuthToken(redisPool, r)
+	clientID, err := GetClientID(redisPool, r)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -292,7 +312,7 @@ func serveWs(redisPool *redis.Pool, hub *Hub, w http.ResponseWriter, r *http.Req
 		return
 	}
 	// client := &Client{ID: uuid.NewV4().String(), hub: hub, conn: conn, send: make(chan *PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
-	client := Client{ID: token, hub: hub, conn: conn, send: make(chan PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
+	client := Client{ID: clientID, hub: hub, conn: conn, send: make(chan PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
 
 	client.hub.register <- client
 

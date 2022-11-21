@@ -26,7 +26,7 @@ func NewRedisPool(addr string) *redis.Pool {
 	}
 }
 
-func GetAuthToken(redis_pool *redis.Pool, r *http.Request) (string, error) {
+func GetClientID(redis_pool *redis.Pool, r *http.Request) (string, error) {
 	client := redis_pool.Get()
 	defer client.Close()
 

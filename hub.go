@@ -114,7 +114,7 @@ func (h *Hub) run() {
 				log.Println("Disconnecting client unable to send info message:", err)
 				if _, ok := h.clients[message.client.ID]; ok {
 					delete(h.clients, message.client.ID)
-					close(message.client.infoChan)
+					close(message.client.send)
 				}
 			}
 
@@ -128,10 +128,10 @@ func (h *Hub) run() {
 			err := sendMessageOnChannel(message.client.infoChan, fmt.Sprintf("unsubscribe from topic %v successful", message.topic))
 
 			if err != nil {
-				log.Println("Disconnecting client unable to send info message:", err)
+				log.Println("Disconnecting client, unable to send info message:", err)
 				if _, ok := h.clients[message.client.ID]; ok {
 					delete(h.clients, message.client.ID)
-					close(message.client.infoChan)
+					close(message.client.send)
 				}
 			}
 
