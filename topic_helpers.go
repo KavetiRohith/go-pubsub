@@ -4,20 +4,20 @@ import "strings"
 
 // isValidSubscribeTopic returns true if the given topic is a valid subscribe topic
 func isValidSubscribeTopic(topic *string) bool {
-	// can be "bucket" or "bucket/filename" or "bucket/*" or "*"
+	// can be "sitename/*" or "sitename/bucket" or "sitename/bucket/*" or "sitename/bucket/filename" or "sitename/*/filename"
 	contentsCount := len(strings.Split(*topic, "/"))
-	return contentsCount <= 2 && contentsCount >= 1
+	return contentsCount <= 3 && contentsCount > 1
 }
 
 // isValidPublishTopic returns true if the given topic is a valid publish topic
 func isValidPublishTopic(topic *string) bool {
-	// bucket/filename or bucket
+	// sitename/bucket/filename or sitename/bucket
 	topic_slice := strings.Split(*topic, "/")
 
-	if len(topic_slice) == 2 {
+	if len(topic_slice) == 3 {
+		return topic_slice[0] != "*" && topic_slice[1] != "*" && topic_slice[2] != "*"
+	} else if len(topic_slice) == 2 {
 		return topic_slice[0] != "*" && topic_slice[1] != "*"
-	} else if len(topic_slice) == 1 {
-		return topic_slice[0] != "*"
 	}
 
 	return false
@@ -25,19 +25,28 @@ func isValidPublishTopic(topic *string) bool {
 
 // isSubTopic returns true if the given subTopic is a valid
 // instance of the given pubTopic
-// subTopic can be: bucket, bucket/*,bucket/filename,*, */filename
-// pubTopic can be: bucket, bucket/filename
+// subTopic can be: sitename/bucket, sitename/bucket/*, sitename/bucket/filename, sitename/*, sitename/*/filename
+// pubTopic can be: sitename/bucket, sitename/bucket/filename
 func isSubTopic(subTopic, pubTopic string) bool {
-	if subTopic == pubTopic || subTopic == "*" {
+	// covers sitename/bucket/filename, sitename/bucket subtopic cases
+	if subTopic == pubTopic {
 		return true
 	}
-	subTopic_ := strings.Split(subTopic, "/")
-	pubTopic_ := strings.Split(pubTopic, "/")
+	sub_topic_contents := strings.Split(subTopic, "/")
+	pub_topic_contents := strings.Split(pubTopic, "/")
 
-	if len(pubTopic_) == 2 && len(subTopic_) == 2 {
-		if subTopic_[0] == pubTopic_[0] && subTopic_[1] == "*" {
+	// covers sitename/* case
+	if len(sub_topic_contents) == 2 && sub_topic_contents[0] == pub_topic_contents[0] && sub_topic_contents[1] == "*" {
+		return true
+	}
+
+	// covers sitename/bucket/*, sitename/*/filename case
+	if len(sub_topic_contents) == 3 && sub_topic_contents[0] == pub_topic_contents[0] {
+		if sub_topic_contents[1] == pub_topic_contents[1] && sub_topic_contents[2] == "*" {
 			return true
-		} else if subTopic_[0] == "*" && subTopic_[1] == pubTopic_[1] {
+		}
+
+		if sub_topic_contents[1] == "*" && sub_topic_contents[2] == pub_topic_contents[2] {
 			return true
 		}
 	}
