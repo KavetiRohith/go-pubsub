@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/websocket"
+	uuid "github.com/satori/go.uuid"
 )
 
 const (
@@ -299,19 +299,31 @@ func (c *Client) writePump(wg *sync.WaitGroup) {
 }
 
 // serveWs handles websocket requests from the peer.
-func serveWs(redisPool *redis.Pool, hub *Hub, w http.ResponseWriter, r *http.Request, wg *sync.WaitGroup) {
-	clientID, err := GetClientID(redisPool, r)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
+func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, wg *sync.WaitGroup) {
+	var resHeader http.Header
+	var clientID string
+	cookie, err := r.Cookie("PubsubClientID")
+
+	switch err {
+	case nil:
+		clientID = cookie.Value
+	case http.ErrNoCookie:
+		clientID = uuid.NewV4().String()
+		cookie := http.Cookie{}
+		cookie.Name = "PubsubClientID"
+		cookie.Value = clientID
+
+		resHeader = http.Header{}
+		resHeader.Add("Set-Cookie", cookie.String())
+
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, resHeader)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	// client := &Client{ID: uuid.NewV4().String(), hub: hub, conn: conn, send: make(chan *PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
+
 	client := Client{ID: clientID, hub: hub, conn: conn, send: make(chan PublishMessage, 256), infoChan: make(chan string), disconnect: make(chan struct{})}
 
 	client.hub.register <- client

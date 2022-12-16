@@ -19,7 +19,6 @@ var subscriptionsFile = flag.String(
 	"client_subscriptions.json",
 	"name of the file containing subscriptions in json",
 )
-var redisServerAddr = flag.String("redis_server_address", ":6379", "")
 var pubsubDataDirPath = flag.String("pubsub_data_dir_path", ".", "")
 
 func main() {
@@ -27,8 +26,6 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Llongfile)
 
 	flag.Parse()
-
-	redisPool := NewRedisPool(*redisServerAddr)
 
 	subscriptions, err := ReadSubscriptionsFromFile(
 		path.Join(*pubsubDataDirPath, *subscriptionsFile),
@@ -51,7 +48,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		serveWs(redisPool, hub, w, r, wg)
+		serveWs(hub, w, r, wg)
 	})
 
 	mux.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +76,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer func() {
 		// extra handling here
-		redisPool.Close()
 		cancel()
 	}()
 
